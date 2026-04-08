@@ -20,7 +20,9 @@ console = Console()
 @click.option("--deep", is_flag=True, default=False, help="Deep analysis mode")
 @click.option("--no-interactive", is_flag=True, default=False,
               help="Skip tool install prompts (CI mode)")
-def main(repo_path, output, model, max_commits, stale_days, claude_path, deep, no_interactive):
+@click.option("--timeout", default=300, show_default=True,
+              help="Timeout in seconds for each Claude API call.")
+def main(repo_path, output, model, max_commits, stale_days, claude_path, deep, no_interactive, timeout):
     """claude-check-repo — AI-powered repository evolution analyzer.
 
     Authenticates via Claude subscription (OAuth) — no API key needed.
@@ -42,6 +44,7 @@ def main(repo_path, output, model, max_commits, stale_days, claude_path, deep, n
         claude_path=claude_path,
         deep_analysis=deep,
         non_interactive=no_interactive,
+        claude_timeout=timeout,
     )
     try:
         orchestrator.run(config)

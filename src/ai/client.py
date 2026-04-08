@@ -39,8 +39,9 @@ def _extract_json(text: str) -> Any:
 class ClaudeCodeClient:
     """Uses claude-code-sdk-python. OAuth via Claude subscription, no API key."""
 
-    def __init__(self, model: str = "claude-opus-4-5") -> None:
+    def __init__(self, model: str = "claude-opus-4-5", timeout: int = 300) -> None:
         self.model = model
+        self.timeout = timeout
         self._check_sdk()
 
     def _check_sdk(self) -> None:
@@ -57,7 +58,7 @@ class ClaudeCodeClient:
             return asyncio.run(self._ask_async(system, user, max_tokens))
         except Exception as e:
             if "Unknown message type" in str(e) or "already running" in str(e):
-                return ClaudeSubprocessClient(model=self.model).ask(system, user, max_tokens)
+                return ClaudeSubprocessClient(model=self.model, timeout=self.timeout).ask(system, user, max_tokens)
             raise
 
     async def _ask_async(self, system: str, user: str, max_tokens: int) -> str:
@@ -94,9 +95,10 @@ class ClaudeCodeClient:
 class ClaudeSubprocessClient:
     """Calls `claude` CLI via subprocess. Sync fallback, zero extra deps."""
 
-    def __init__(self, model: str = "claude-opus-4-5", claude_path: str = "claude") -> None:
+    def __init__(self, model: str = "claude-opus-4-5", claude_path: str = "claude", timeout: int = 300) -> None:
         self.model = model
         self.claude_path = claude_path
+        self.timeout = timeout
         self._check_cli()
 
     def _check_cli(self) -> None:
@@ -112,7 +114,7 @@ class ClaudeSubprocessClient:
             [self.claude_path, "--print", "--output-format", "text",
              "--model", self.model, "--max-turns", "1"],
             input=full_prompt,
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=self.timeout,
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -135,10 +137,11 @@ ClaudeClient = ClaudeCodeClient | ClaudeSubprocessClient
 def make_client(
     model: str = "claude-opus-4-5",
     claude_path: str = "claude",
+    timeout: int = 300,
 ) -> ClaudeCodeClient | ClaudeSubprocessClient:
     """Factory: tries SDK first, falls back to subprocess CLI."""
     try:
         import claude_code_sdk  # noqa: F401
-        return ClaudeCodeClient(model=model)
+        return ClaudeCodeClient(model=model, timeout=timeout)
     except ImportError:
-        return ClaudeSubprocessClient(model=model, claude_path=claude_path)
+        return ClaudeSubprocessClient(model=model, claude_path=claude_path, timeout=timeout)

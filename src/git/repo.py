@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+# Valid branch name: must not start with '-' (git option prefix),
+# allows letters, digits, /, _, ., - (covers feature/foo, release-1.0, etc.)
+_BRANCH_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_.\-]*$")
+
 
 @dataclass
 class CommitInfo:
@@ -72,6 +76,35 @@ class GitRepo:
     def get_last_activity(self) -> str:
         result = self._run(["git", "log", "-1", "--format=%ai"])
         return result.stdout.strip()
+
+    def get_commits_for_branch(self, branch_name: str, max_count: int = 100) -> list[CommitInfo]:
+        """Load commits for a specific branch, validated against the allowed branch name pattern."""
+        if not _BRANCH_RE.match(branch_name):
+            raise ValueError(f"Invalid branch name: {branch_name!r}")
+        # verify branch exists before running log — avoids silent empty result
+        check = self._run(["git", "rev-parse", "--verify", branch_name])
+        if check.returncode != 0:
+            return []
+        result = self._run([
+            "git", "log", branch_name, f"--max-count={max_count}", "--reverse",
+            "--format=%H|||%h|||%s|||%an|||%ai",
+        ])
+        commits: list[CommitInfo] = []
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split("|||")
+            if len(parts) < 5:
+                continue
+            hash_, short_hash, message, author, date = parts[:5]
+            stat_result = self._run(["git", "show", "--shortstat", "--format=", hash_.strip()])
+            files, ins, dels = self._parse_shortstat(stat_result.stdout)
+            commits.append(CommitInfo(
+                hash=hash_.strip(), short_hash=short_hash.strip(),
+                message=message.strip(), author=author.strip(), date=date.strip(),
+                files_changed=files, insertions=ins, deletions=dels,
+            ))
+        return commits
 
     def get_commits(self, max_count: int = 100) -> list[CommitInfo]:
         result = self._run([

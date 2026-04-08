@@ -56,11 +56,11 @@ def detect(repo_path: Path) -> StackInfo:
     info.comment_prefix_map = comment_map
 
     fw: list[str] = []
-    if _any_file(file_set, ["manage.py"]) or _content_has(repo_path, "django"):
+    if _any_file(file_set, ["manage.py"]) or _content_has(repo_path, "from django", as_import=True) or _content_has(repo_path, "import django", as_import=True):
         fw.append("Django")
-    if _content_has(repo_path, "fastapi"):
+    if _content_has(repo_path, "from fastapi", as_import=True) or _content_has(repo_path, "import fastapi", as_import=True):
         fw.append("FastAPI")
-    if _content_has(repo_path, "from flask") or _content_has(repo_path, "import flask"):
+    if _content_has(repo_path, "from flask", as_import=True) or _content_has(repo_path, "import flask", as_import=True):
         fw.append("Flask")
 
     pkg = _read_json(repo_path / "package.json")
@@ -145,14 +145,20 @@ def detect(repo_path: Path) -> StackInfo:
     return info
 
 
+_SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist", "build", ".next", ".nuxt"}
+
+
 def _list_files(path: Path, max_files: int = 2000) -> list[str]:
     result: list[str] = []
     try:
         for f in path.rglob("*"):
-            if f.is_file() and ".git" not in f.parts:
-                result.append(str(f.relative_to(path)))
-                if len(result) >= max_files:
-                    break
+            if not f.is_file():
+                continue
+            if any(part in _SKIP_DIRS for part in f.parts):
+                continue
+            result.append(str(f.relative_to(path)))
+            if len(result) >= max_files:
+                break
     except (PermissionError, OSError):
         pass
     return result
@@ -171,12 +177,29 @@ def _any_file(file_set: set[str], names: list[str]) -> bool:
     return any(name.lower() in (f.lower() for f in file_set) for name in names)
 
 
-def _content_has(repo_path: Path, keyword: str) -> bool:
+def _content_has(repo_path: Path, keyword: str, as_import: bool = False) -> bool:
+    """Search for keyword in project source files (excluding vendor dirs).
+
+    When as_import=True the keyword must appear at line start (real import,
+    not a string literal inside helper code like this file itself).
+    """
+    import re as _re
+    pattern = _re.compile(
+        rf"^{_re.escape(keyword)}\b", _re.MULTILINE | _re.IGNORECASE
+    ) if as_import else None
+
     for ext in (".py", ".toml", ".cfg", ".ini"):
-        for f in list(repo_path.rglob(f"*{ext}"))[:20]:
+        for f in list(repo_path.rglob(f"*{ext}"))[:40]:
+            if any(part in _SKIP_DIRS for part in f.parts):
+                continue
             try:
-                if keyword in f.read_text(errors="ignore").lower():
-                    return True
+                text = f.read_text(errors="ignore")
+                if pattern:
+                    if pattern.search(text):
+                        return True
+                else:
+                    if keyword.lower() in text.lower():
+                        return True
             except OSError:
                 pass
     return False

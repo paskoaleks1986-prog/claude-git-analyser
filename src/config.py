@@ -17,6 +17,7 @@ class Config:
     fix_mode: bool = False
     non_interactive: bool = False   # skip tool install prompts
     claude_path: str = "claude"     # path to claude CLI binary
+    claude_timeout: int = 300       # seconds per Claude API call
 
     def validate(self) -> None:
         """Verify that the claude CLI is available in PATH."""
