@@ -1,0 +1,30 @@
+# .gitignore:.gitignore
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Coverage
+.coverage
+coverage.json
+htmlcov/
+
+# Output files — do not commit
+repo_analysis.yaml
+report.yaml
+*.yaml.bak
+
+# Env — never commit secrets
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
